@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure-regionsberegner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#EDF1F2; --surface:#F8FAFA; --ink:#17262D; --muted:#56676F; --line:#C9D3D6;
+  --accent:#0E5E66; --accent-ink:#FFFFFF; --up:#A3253A; --down:#2F7A4D; --warn:#8A5A00;
+  --bar-today:#9FB8BC;
+  --font:"Schibsted Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F181C; --surface:#162227; --ink:#E3EBED; --muted:#93A5AC; --line:#2A3A40;
+    --accent:#5BB6BD; --accent-ink:#0F181C; --up:#F07A8A; --down:#7BC79A; --warn:#E0B45A;
+    --bar-today:#3E5A60;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:var(--font);font-size:16px;line-height:1.5;font-variant-numeric:tabular-nums}
+main{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:2.6rem;line-height:1.05;letter-spacing:-0.02em;margin:0 0 12px;font-weight:700;max-width:16ch}
+h2{font-size:1.35rem;margin:0 0 12px;font-weight:600;letter-spacing:-0.01em}
+h3{font-size:1rem;margin:24px 0 8px;font-weight:600}
+p{margin:0 0 12px;max-width:72ch}
+.lede{color:var(--muted);font-size:1.1rem;max-width:62ch}
+a{color:var(--accent)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.setup{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;margin:36px 0 28px}
+@media (max-width:820px){.setup{grid-template-columns:1fr}h1{font-size:2rem}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:28px 20px;text-align:left;cursor:pointer;display:block;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent)}
+.drop strong{display:block;font-size:1.1rem}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.small{font-size:.875rem;color:var(--muted)}
+.filemeta{margin-top:14px;font-size:.9rem}
+.filemeta dl{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin:0}
+.filemeta dt{color:var(--muted)}
+.filemeta dd{margin:0}
+
+fieldset{border:0;margin:0 0 18px;padding:0}
+legend{font-weight:600;margin-bottom:8px;padding:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.chip span{display:inline-block;padding:5px 11px;border:1px solid var(--line);border-radius:999px;font-size:.875rem;background:var(--bg)}
+.chip input:checked + span{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip input:focus-visible + span{outline:3px solid var(--accent);outline-offset:2px}
+.chip .flag{font-size:.75rem;opacity:.8;margin-left:4px}
+.addregion{display:flex;gap:8px;margin-top:10px}
+.addregion input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.check{display:flex;gap:10px;align-items:flex-start;margin:6px 0}
+.check input{margin-top:5px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:10px 18px;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.status{margin-top:12px;font-size:.9rem;color:var(--muted);min-height:1.5em}
+.status.error{color:var(--up)}
+progress{width:100%;height:6px;margin-top:8px;accent-color:var(--accent)}
+
+/* Regionsmatrixen er sidens bærende element */
+.matrix{width:100%;border-collapse:collapse;margin:8px 0 6px}
+.matrix th{font-weight:500;color:var(--muted);font-size:.85rem;text-align:right;padding:8px 12px;border-bottom:1px solid var(--line)}
+.matrix th:first-child,.matrix td:first-child{text-align:left}
+.matrix td{padding:14px 12px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
+.matrix tr.row{cursor:pointer}
+.matrix tr.row:hover td{background:color-mix(in srgb, var(--accent) 6%, transparent)}
+.matrix tr.row.active td{background:color-mix(in srgb, var(--accent) 12%, transparent)}
+.matrix tr.current td{font-weight:600}
+.region-name{font-weight:600}
+.region-code{display:block;font-size:.8rem;color:var(--muted);font-weight:400}
+.num-big{font-size:1.15rem;font-weight:600}
+.delta{font-weight:600;white-space:nowrap}
+.delta.up{color:var(--up)} .delta.down{color:var(--down)} .delta.flat{color:var(--muted)}
+.barcell{width:30%;min-width:140px}
+.bar{position:relative;height:14px;background:color-mix(in srgb, var(--line) 45%, transparent);border-radius:3px;overflow:hidden}
+.bar .today{position:absolute;left:0;top:0;bottom:0;background:var(--bar-today)}
+.bar .rise{position:absolute;top:0;bottom:0;background:var(--up)}
+.bar .ref{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);margin:6px 0 0}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+.badge{display:inline-block;font-size:.75rem;padding:1px 7px;border-radius:999px;border:1px solid currentColor;color:var(--warn);margin-left:6px;font-weight:500}
+.tablewrap{overflow-x:auto}
+
+.results{margin-top:8px}
+.summary{display:flex;flex-wrap:wrap;gap:8px 28px;margin:0 0 18px;font-size:.95rem;color:var(--muted)}
+.summary b{color:var(--ink);font-weight:600}
+.detail{margin-top:40px}
+.detail-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.data{width:100%;border-collapse:collapse;font-size:.9rem}
+.data th{text-align:right;font-weight:500;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.data td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.data th:first-child,.data td:first-child{text-align:left}
+.data td.meter{max-width:340px}
+.data .sub{display:block;color:var(--muted);font-size:.8rem}
+.rule{font-size:.8rem;white-space:nowrap}
+.rule.up{color:var(--up)} .rule.none{color:var(--muted)} .rule.warn{color:var(--warn)}
+details.assume{margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
+details.assume summary{cursor:pointer;font-weight:600}
+details.assume ul{max-width:76ch;padding-left:20px}
+details.assume li{margin:6px 0}
+.ratetable{border-collapse:collapse;font-size:.9rem;margin:8px 0}
+.ratetable td{padding:3px 16px 3px 0}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Hvad koster jeres Azure i en anden region?</h1>
+    <p class="lede">Upload en cost details-eksport fra Cost Management. Siden prissætter det samme forbrug i de regioner, du vælger, både med dagens priser og med de prisstigninger, der træder i kraft 1. februar 2027.</p>
+  </header>
+
+  <section class="setup" aria-label="Opsætning">
+    <div class="panel">
+      <label class="drop" id="drop" for="file">
+        <input type="file" id="file" accept=".csv,text/csv">
+        <strong>Vælg CSV-fil, eller træk den hertil</strong>
+        <span class="small">Filen læses kun i din browser. Det eneste, der sendes videre, er meter-id'er til opslag i Microsofts offentlige prisliste.</span>
+      </label>
+      <div class="filemeta" id="filemeta" hidden></div>
+      <progress id="parseprog" max="1" value="0" hidden></progress>
+    </div>
+
+    <div class="panel">
+      <fieldset>
+        <legend>Sammenlign med disse regioner</legend>
+        <div class="chips" id="chips"></div>
+        <div class="addregion">
+          <input id="customregion" placeholder="Anden region, f.eks. italynorth" aria-label="Tilføj region (armRegionName)">
+          <button class="btn ghost" id="addregion" type="button">Tilføj</button>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Beregning</legend>
+        <label class="check"><input type="checkbox" id="optInterzone" checked><span>Udelad trafik mellem availability zones</span></label>
+        <label class="check"><input type="checkbox" id="optRI" checked><span>Fritag reservationsforbrug for prisstigningen<br><span class="small">Eksisterende reservationer beholder deres pris til udløb.</span></span></label>
+        <label class="check"><input type="checkbox" id="optMonthly"><span>Vis som månedsestimat<br><span class="small">Omregner eksportens periode til 30,4 dage.</span></span></label>
+      </fieldset>
+      <button class="btn" id="run" type="button" disabled>Beregn priser</button>
+      <progress id="lookprog" max="1" value="0" hidden></progress>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="results" id="results" hidden aria-label="Resultat">
+    <h2>Samme forbrug, forskellige regioner</h2>
+    <div class="summary" id="summary"></div>
+    <div class="tablewrap">
+      <table class="matrix" id="matrix"></table>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--bar-today)"></i>Pris i dag</span>
+      <span><i style="background:var(--up)"></i>Stigning 1. feb. 2027</span>
+      <span><i style="background:var(--ink);width:2px"></i>Jeres nuværende pris i dag</span>
+    </div>
+    <p class="small" style="margin-top:8px">Vælg en række for at se fordelingen på tjenester og de enkelte meters.</p>
+
+    <section class="detail" id="detail"></section>
+
+    <details class="assume">
+      <summary>Forudsætninger og prisregler</summary>
+      <ul>
+        <li>Nye priser beregnes som jeres faktiske omkostning ganget med forholdet mellem listeprisen i målregionen og listeprisen i den region, ressourcen kører i i dag. Jeres rabatprocent følger dermed med. Listepriser hentes i USD fra Azure Retail Prices API, men forholdstallet er uafhængigt af valuta.</li>
+        <li>Meters matches på tværs af regioner på produkt, SKU og meternavn. Findes et match ikke, er tjenesten eller størrelsen ikke tilgængelig i regionen, og omkostningen medtages uændret og markeres.</li>
+        <li>Globale meters og trafikzoner (f.eks. Zone 1) er ens på tværs af regioner og medtages uændret.</li>
+        <li>Kun linjer med gebyrtypen Usage indgår. Køb, refusioner og ubrugte reservationer vises separat. Brug en amortiseret eksport, hvis I har reservationer eller savings plans; ellers står reservationsforbrug til 0 kr.</li>
+        <li>Prisstigningerne gælder fra 1. februar 2027. Regionale stigninger gælder virtuelle maskiner og storage:</li>
+      </ul>
+      <table class="ratetable" id="ratetable"></table>
+      <ul>
+        <li>Ældre v1- og v2-serier stiger ca. 25 % i alle regioner i stedet for den regionale stigning: Bv1, D, Ds, F, Fs, G, Gs, Ls, NP, HC, Av2, Amv2, Dv2, Dsv2, Fsv2 og Lsv2.</li>
+        <li>Undtaget fra den regionale stigning: v7-VM'er samt Queues, Tables, General Block Blob, Standard Page Blob, Transaction Optimized og Azure Container Storage.</li>
+        <li>Savings plans beskytter ikke mod stigningen og behandles som pay-as-you-go. Tiered meters beregnes ud fra laveste betalte trin.</li>
+        <li>Prisreglerne ligger i <code>rules.js</code>, så de kan rettes, hvis Microsoft justerer listen.</li>
+      </ul>
+    </details>
+  </section>
+</main>
+
+<script src="rules.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

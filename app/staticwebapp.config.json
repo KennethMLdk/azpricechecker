@@ -1,0 +1,16 @@
+{
+  "platform": {
+    "apiRuntime": "node:20"
+  },
+  "routes": [
+    { "route": "/api/*", "methods": ["GET"] }
+  ],
+  "globalHeaders": {
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer"
+  },
+  "mimeTypes": {
+    ".json": "application/json"
+  }
+}

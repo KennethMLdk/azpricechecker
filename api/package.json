@@ -1,0 +1,12 @@
+{
+  "name": "azure-region-calc-api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/functions/*.js",
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
